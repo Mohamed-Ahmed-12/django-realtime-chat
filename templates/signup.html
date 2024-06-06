@@ -1,0 +1,70 @@
+{% extends "base.html" %} 
+{% load static %}
+{% block title %} Signup {% endblock %}
+{% block content %}
+
+<section class="vh-100 bg-image" style='background-image:url("{% static "images/OIP.jpeg" %}");'>
+  <div class="mask d-flex align-items-center h-100 gradient-custom-3">
+    <div class="container h-100">
+      <div class="row d-flex justify-content-center align-items-center h-100">
+        <div class="col-12 col-md-9 col-lg-7 col-xl-6">
+          <div class="card" style="border-radius: 15px;">
+            <div class="card-body p-5">
+              <h2 class="text-uppercase text-center mb-5">Create an account</h2>
+              {% if error %}
+              <div class='text-danger my-3'>
+               {{error}}
+              </div>
+              {% endif %}
+              <form method='post' action="{% url 'signup' %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="form-outline mb-4">
+                  <input type="text" class="form-control form-control-lg" name='username' placeholder='Username' required/>
+                </div>
+
+                <div class="form-outline mb-4">
+                  <input type="email" class="form-control form-control-lg" name='email' placeholder='E-mail' required/>
+                </div>
+
+                <div class="form-outline mb-4">
+                  <input type="text" class="form-control form-control-lg" name='firstname' placeholder='First Name' required/>
+                </div>
+
+                <div class="form-outline mb-4">
+                  <input type="text" class="form-control form-control-lg" name='lastname' placeholder='Last Name' required/>
+                </div>
+
+                <div class="form-outline mb-4">
+                  <input type="password" class="form-control form-control-lg" name='password1' placeholder='Password' required/>
+
+                </div>
+
+                <div class="form-outline mb-4">
+                  <input type="password" class="form-control form-control-lg" name='password2'placeholder='Confirm Password' required/>
+                </div>
+
+                <div class="input-group mb-4">
+                  <input type="file" class="form-control" id="inputFile" name="pic" required>
+                  <label class="input-group-text" for="inputFile">Upload Profile Image</label>
+                </div>
+
+                <div class="d-flex justify-content-center">
+                  <button type="submit"
+                    class="btn btn-success btn-block btn-lg gradient-custom-4">Register</button>
+                </div>
+
+
+                <p class="text-center text-muted mt-5 mb-0">Have already an account? <a href="{% url 'login' %}"
+                    class="fw-bold">Login here</a></p>
+
+              </form>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

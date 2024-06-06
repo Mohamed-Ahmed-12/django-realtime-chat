@@ -1,0 +1,6 @@
+to enable project run on lan (based on ip of server or pc) on browser (http instead https)
+in firefox url (about:config) 
+set to true 
+media.peerconnection.enabled
+media.devices.insecure.enabled
+media.getusermedia.insecure.enabled

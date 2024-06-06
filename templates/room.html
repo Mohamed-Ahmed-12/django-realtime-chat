@@ -1,0 +1,460 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}
+{% if room_name %}
+{{room_name}}
+{% else %}
+Home
+{% endif %}
+{% endblock %}
+{% block content %}
+
+{{ room_name|json_script:"room-name" }}
+{{ request.user.username|json_script:"user-name" }}
+
+<div class="container-fluid ">
+  <div class="row">
+    <!-- rooms -->
+    <div class="col-md-6 col-lg-5 col-xl-4 border bg-light vh-100">
+
+      <div class="d-flex flex-row justify-content-between align-items-center">
+        <h2 class="text-dark m-3 fw-bold"
+          style="font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;">
+          {{ request.user }}'s Chats</h2>
+        <div>
+          <a href="{% url 'room' room_name='0' %}" class="btn btn-primary bi bi-messenger"></a>
+          <a href="{% url 'logout' %}" class="btn btn-danger bi bi-box-arrow-left"></a>
+        </div>
+
+      </div>
+      <div class="p-3">
+        <div class="input-group mb-3">
+          <span class="input-group-text bi bi-search" id="basic-addon1"></span>
+          <input type="text" class="form-control rounded-end" placeholder="search" aria-label="Username"
+            aria-describedby="basic-addon1" onkeyup="console.log(this.value)">
+        </div>
+
+        <div class="overflow-auto" style="max-height: 70vh;">
+          <ul class="list-unstyled mb-0">
+            {% for chat , msg , count in chats %}
+            {%for member in chat.member.all %}
+            {% if member != request.user %}
+            <li class="p-2 border rounded-2 my-1 bg-white">
+              <a href="{% url 'room' chat.name %}" class="d-flex justify-content-between text-decoration-none">
+                <div class="d-flex flex-row">
+                  <div class="position-relative me-3">
+                    <img src="{{ member.pic.url }}" alt="avatar" class="d-flex align-self-center rounded-circle"
+                      width="60" height='60'>
+                    {% if member.is_online %}
+                    <i class="position-absolute bottom-0 end-0 translate-middle border border-light rounded-circle bi bi-dot bg-success text-success"
+                      style="font-size: .49rem;"></i>
+                    {% endif %}
+                  </div>
+                  <div class="pt-1">
+                    <p class="fw-bold mb-0" style="font-family: 'Times New Roman', Times, serif;">{{member.username}}
+                    </p>
+                    <p class="small text-muted">{{ msg.content|truncatechars:50 }}</p>
+                  </div>
+                </div>
+                <div class="pt-1">
+                  <p class="small text-muted mb-1">{{ msg.timestamp|time|upper}}</p>
+                  {% if msg.user.id != request.user.id and count > 0 %}
+                  <span class="badge bg-danger rounded-pill float-end">{{count}}</span>
+                  {% else %}
+                  {% if msg.read %}
+                  {% if msg.user.id == request.user.id %}
+                  <span class="bi bi-check-all float-end"></span>
+                  {% endif %}
+
+                  {% else %}
+                  <span class="bi bi-check-all float-end text-muted"></span>
+                  {% endif %}
+                  {% endif %}
+                </div>
+              </a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            {% endfor %}
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- chat room -->
+    {% if room_name %}
+    <div class="col-md-6 col-lg-7 col-xl-8 border bg-white vh-100">
+
+      <!-- Header Section -->
+      <div class="row justify-content-center align-items-center p-1">
+        <div class="col-auto position-relative p-1 ms-1">
+          <img src='{{ user.pic.url }}' alt="user pic" class="rounded-circle " id='user-pic-profile' width="95px"
+            height="95px" />
+          {% if user.is_online %}
+          <i class="position-absolute bottom-0 end-0 translate-middle border border-light rounded-circle bi bi-dot bg-success text-success"
+            style="font-size: .49rem;"></i>
+          {% endif %}
+        </div>
+        <div class="col">
+          <h3 style="font-family: 'Times New Roman', Times, serif;">{{ user.username }}</h3>
+        </div>
+        <div class="col-1">
+          <a href ="{% url 'video' room_name %}" class="btn btn-danger bi bi-camera-video" ></a>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="row d-flex flex-column justify-content-between" style="background-image:url('{% static "images/OIP.jpeg" %}')">
+        <div class='overflow-auto p-3' style="height:80vh;" id="myScrollableElement">
+          <div class="d-flex flex-row justify-content-start flex-wrap-reverse my-3 msgs d-none"></div>
+          {% for msg in messages %}
+          {% if msg.user == user %}
+          <div class="d-flex flex-row justify-content-start flex-wrap-reverse my-3 msgs">
+            <div class="">
+              <img src="{{ msg.user.pic.url }}" alt="pic" class="rounded-circle p-0 img-fluid border border-white"
+                height="30px" width="30px">
+            </div>
+            <div class="">
+              {% if msg.message_type == 'text' %}
+              <p class="bg-warning text-white p-2 shadow rounded-end rounded-bottom m-2">
+                {{ msg.content }}
+              </p>
+              {% else %}
+              <div class="audio-player m-2">
+                <audio controls>
+                  <source src="/media/{{ msg.content }}" type="audio/mpeg">
+                </audio>
+              </div>
+              {% endif %}
+              <span class="text-white float-end"><small>{{msg.timestamp|time|upper}}</small></span>
+            </div>
+
+          </div>
+          {% else %}
+          <!--my messages -->
+          <div class="flex-row justify-content-end flex-wrap-reverse my-3 msgs" style="display:flex" id="msg{{msg.id}}">
+            <!-- Dropdown menu only  visible to the sender of a message -->
+            <div class="dropdown mt-2">
+              <i class="bi bi-three-dots-vertical text-white" id="{{msg.id}}" data-bs-toggle="dropdown"
+                aria-expanded="false"></i>
+              <ul class="dropdown-menu" aria-labelledby="{{msg.id}}">
+                <li><button class="dropdown-item delbtn" onclick="deleteMessage()" data-msgtype="{{ msg.message_type }}"
+                    data-msgid="{{msg.id}}">Delete Message</button></li>
+              </ul>
+            </div>
+            <div class="">
+              {% if msg.message_type == 'text' %}
+              <p class="text-primary border border-primary p-2 shadow rounded-bottom rounded-start m-2"
+                style="background-color: #c6e2ff;">
+                {{msg.content }}</p>
+              {% else %}
+              <div class="audio-player m-2">
+                <audio controls>
+                  <source src="/media/{{ msg.content }}" type="audio/mpeg">
+                </audio>
+              </div>
+
+              {% endif %}
+              <span class="text-white"><small>{{msg.timestamp|time|upper}}</small></span>
+            </div>
+            <div class="">
+              <img src="{{ request.user.pic.url }}" alt="pic" class="rounded-circle p-0 img-fluid border border-white"
+                height="30px" width="30px">
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Sending Messages -->
+      <div class="row justify-content-center bg-white">
+        <form class='col d-flex flex-row p-3 input-group' onsubmit="handleSubmit(event)">
+          <button class="btn btn-outline-danger bi bi-mic-fill" type="button" id="startButton"
+            onclick="Recording()"></button>
+
+          <input type="text" name="msg" id="chat-message-input" class="form-control" placeholder="type message..."
+            aria-label="Recipient's username" aria-describedby="chat-message-submit">
+
+          <button class="btn btn-success bi bi-emoji-heart-eyes-fill"></button>
+          <button type="submit" id="chat-message-submit" class="btn btn-primary bi bi-send"
+            onclick='sendMessage()'></button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-md-6 col-lg-7 col-xl-8 vh-100 bg-light" style="background-image:url('{% static "images/chat-logo.png" %}');">
+    </div>
+    {% endif %}
+
+
+  </div>
+</div>
+
+<!-- Button trigger toast -->
+<button type="button" class="btn btn-primary d-none" id="showToastBtn">
+  Show Toast
+</button>
+
+<!-- Toast container -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 11">
+  <div id="myToast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header" style="background-color: rgb(197, 240, 197);">
+      <strong class="me-auto">Message Deleted Successfully</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* Get variables from django */
+  let roomName = JSON.parse(document.getElementById('room-name').textContent);
+  const username = JSON.parse(document.getElementById('user-name').textContent);
+
+  if (roomName != '') {
+    /* Websocket connection */
+    const chatSocket = new WebSocket(
+      'ws://'
+      + window.location.host
+      + '/ws/chat/'
+      + roomName
+      + '/'
+    );
+
+    //connect
+    chatSocket.onopen = function (e) {
+      console.info("Connected to Chat Socket");
+    };
+
+
+    //disconnect
+    chatSocket.onclose = function (e) {
+      console.error('Chat socket closed unexpectedly');
+    };
+
+    function handleMessages(data){
+      const message_sender = data[0]['fields']['user'][0];
+      const message_time_created = data[0]['fields']['timestamp'];
+
+      //add received message to room
+      let html_msg;
+      let lastMessage = document.querySelector('.msgs:last-child');
+      const newMessage = document.createElement('div');
+
+      if (message_sender == username) {
+        if ('content' in data[0]['fields']) {// text
+          const message_content = data[0]['fields']['content'];
+          html_msg = html_msg_text(message_content, 0);
+        } else { // audio or video file
+          const record_url = data[0]['fields']['file'];
+          html_msg = html_msg_audio(record_url);
+        }
+        newMessage.className = 'd-flex flex-row justify-content-end flex-wrap-reverse my-3 msgs';
+        newMessage.innerHTML =
+          `<div class="">` + html_msg + `
+        <span class="text-white"><small>${handleTimeStamp(message_time_created)}</small></span>
+      </div>
+      <div class="">
+        <img src="{{ request.user.pic.url }}" alt="pic" class="rounded-circle p-0 img-fluid border border-white" height="30px" width="30px">
+      </div>`;
+
+      } else {
+        if ('content' in data[0]['fields']) {// text
+          const message_content = data[0]['fields']['content'];
+          html_msg = html_msg_text(message_content, 1);
+        } else { // audio or video file
+          const record_url = data[0]['fields']['file'];
+          html_msg = html_msg_audio(record_url);
+        }
+        const imgSrc = document.querySelector('#user-pic-profile').getAttribute('src');
+        newMessage.className = 'd-flex flex-row justify-content-start flex-wrap-reverse my-3 msgs';
+
+        newMessage.innerHTML =
+          `<div class="">
+        <img src="${imgSrc}" alt="pic" class="rounded-circle p-0 img-fluid border border-white" height="30px" width="30px">
+      </div>
+      <div class="">`+ html_msg + `
+        <span class="text-white float-end"><small>${handleTimeStamp(message_time_created)}</small></span>
+      </div>`;
+      }
+      lastMessage.parentNode.insertBefore(newMessage, lastMessage.nextSibling);
+
+      /* To get the last message >> the end of chat  */
+      const scrollableElement = document.getElementById('myScrollableElement');
+      scrollableElement.scrollTop = scrollableElement.scrollHeight;
+    }
+    //receive 
+    chatSocket.onmessage = function (e) {
+      let data = JSON.parse(e.data);
+      console.log(data)
+      if (data.hasOwnProperty("message")) {
+        data = JSON.parse(data['message']);
+        if(data [0]){
+          handleMessages(data);
+        }    
+      }
+        
+    };
+
+
+    document.querySelector('#chat-message-input').onkeyup = function (e) {
+      if (e.key === 'Enter') {  // enter, return
+        document.querySelector('#chat-message-submit').click();
+      }
+    };
+
+    /* text message */
+    function sendMessage() {
+      const messageInputDom = document.querySelector('#chat-message-input');
+      const message = messageInputDom.value;
+
+      if (message != '') {
+        chatSocket.send(JSON.stringify({
+          'action': "createMsg",
+          'message': message,
+          'message_type': 'text'
+        }));
+        messageInputDom.value = '';
+      }
+    };
+
+    /* voice record */
+    let mediaRecorder;
+    const button = document.getElementById('startButton');
+
+    function Recording() {
+      if (button.id === 'startButton') {
+        alert('Start Recording ...');
+        // Request access to the user's microphone
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(function (stream) {
+            // Create a MediaRecorder instance to record the audio stream
+            mediaRecorder = new MediaRecorder(stream); // Assign value to mediaRecorder variable
+            const chunks = [];
+
+            // Event handler for when data is available
+            mediaRecorder.ondataavailable = function (event) {
+              chunks.push(event.data);
+            };
+
+            // Event handler for when recording is stopped
+            mediaRecorder.onstop = function () {
+              // Create a Blob from the recorded chunks
+              const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+
+              // using a FileReader to read the contents of the Blob object as an ArrayBuffer, then sending it via the WebSocket's send method.
+              const reader = new FileReader();
+              reader.onload = function (event) {
+                const arrayBuffer = event.target.result;
+                const uint8Array = new Uint8Array(arrayBuffer);
+                // Convert the ArrayBuffer to a base64-encoded string
+                const base64Data = btoa(String.fromCharCode.apply(null, uint8Array));
+                // Create an object to hold both data types
+                const data = {
+                  'action': "createMsg",
+                  'record': base64Data,
+                  'message_type': 'record'
+                };
+                // Serialize the data to JSON format
+                const serializedData = JSON.stringify(data);
+                //console.log(serializedData)
+                // send the record (as binary data) to the server 
+                chatSocket.send(serializedData);
+              }
+              reader.readAsArrayBuffer(audioBlob);
+
+            };
+
+            // Start recording
+            mediaRecorder.start();
+
+            // Update button appearance and text
+            button.id = 'stopButton';
+            button.textContent = ' Stop Rec';
+          })
+          .catch(function (error) {
+            console.error('Error accessing microphone:', error);
+          });
+      } else {
+        // Stop recording
+        mediaRecorder.stop();
+        // Update button appearance and text
+        button.id = 'startButton';
+        button.textContent = '';
+      }
+    };
+
+    /* Delete Any Message */
+    function deleteMessage() {
+      // Get references to all the buttons
+      const buttons = document.getElementsByClassName("delbtn");
+
+      // Add a click event listener to each button
+      for (let i = 0; i < buttons.length; i++) {
+        buttons[i].addEventListener("click", function () {
+          // Retrieve the value of the "data-value" attribute of the clicked button
+          let id = this.getAttribute("data-msgid");
+          let type = this.getAttribute("data-msgtype");
+          chatSocket.send(JSON.stringify({
+            'action': "deleteMsg",
+            'message_id': id,
+            'message_type': type
+          }));
+          document.getElementById(`msg${id}`).style.display = "none";
+          document.getElementById('showToastBtn').click();
+        });
+      }
+    };
+
+    /* helper functions */
+    function html_msg_text(content, flag) {
+      return flag == 0 ? `<p class="text-primary border border-primary p-2 shadow rounded-bottom rounded-start m-2" style='background-color:#c6e2ff'>${content}</p>` : `<p class="bg-warning text-white p-2 shadow rounded-end rounded-bottom m-2">${content}</p>`;;
+
+    }
+    function html_msg_audio(record) {
+      return `<div class="audio-player m-2"><audio controls><source src="/media/${record}" type="audio/mpeg"></audio></div>`;
+    }
+    function handleSubmit(event) {
+      // Prevent the default form submission behavior
+      event.preventDefault();
+
+      // Optionally, submit the form programmatically
+      // if needed after performing custom logic
+      // event.target.submit();
+    };
+    function handleTimeStamp(timestamp) {
+      const date = new Date(timestamp);
+      // Extract individual components
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // Months are zero-based, so add 1
+      const day = date.getDate();
+      let hours = date.getHours();
+      const minutes = date.getMinutes();
+      const seconds = date.getSeconds();
+
+      let period = 'A.M.';
+
+      if (hours >= 12) {
+        period = 'P.M.';
+        hours %= 12;
+      }
+
+      if (hours === 0) {
+        hours = 12;
+      }
+      // Output: 2023-09-26 00:58:20
+      const formattedTime = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+      return `${hours}:${minutes} ${period}`;
+    };
+    // Activate the toast when the button is clicked
+    document.getElementById('showToastBtn').addEventListener('click', function () {
+      var myToast = new bootstrap.Toast(document.getElementById('myToast'));
+      myToast.show();
+    });
+
+  }
+</script>
+{% endblock %}

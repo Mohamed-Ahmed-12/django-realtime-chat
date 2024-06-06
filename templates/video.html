@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}
+Video
+{% endblock %}
+{% block content %}
+{{ room_name|json_script:"room-name" }}
+{{ request.user.username|json_script:"user-name" }}
+
+<div class="container">
+    <h4 class="text-primary fw-bold">{{ request.user.username}}</h4>
+    <div class="row p-1">
+        <div class="col-6">
+            <video id="localVideo" autoplay playsinline class="border border-primary"></video>
+        </div>
+        <div class="col-6">          
+            <video id="remoteVideo" autoplay playsinline class="border border-danger"></video>
+        </div>
+    </div>
+    
+    <button type="button" class="btn btn-secondary bi bi-camera-video-off" data-bs-dismiss="modal" id="hangupButton"></button>
+    <button class="btn btn-danger bi bi-mic" id="micButton"></button>
+</div>
+
+<script>
+    /* Get variables from django */
+    const username = JSON.parse(document.getElementById('user-name').textContent);
+    let roomName = JSON.parse(document.getElementById('room-name').textContent);
+
+    const chatSocket = new WebSocket(
+        'ws://'
+        + window.location.host
+        + '/ws/call/'
+        + roomName
+        + '/'
+    );
+    //connect
+    chatSocket.onopen = function (e) {
+        console.info("Connected to Chat Socket");
+    };
+
+    //disconnect
+    chatSocket.onclose = function (e) {
+        console.error('Chat socket closed unexpectedly');
+    };
+    /* Video Call Script */
+
+    let pc;
+
+    let localStream;
+    let remoteStream;
+
+    let localVideo = document.getElementById('localVideo');
+    let remoteVideo = document.getElementById('remoteVideo');
+
+    let hangupButton = document.getElementById('hangupButton');
+    let micButton = document.getElementById('micButton');
+
+    // Add event listeners to buttons
+
+    hangupButton.addEventListener('click', hangupCall);
+    micButton.addEventListener('click', toggleMic);
+
+    {% comment %} const configuration = { 
+    iceServers: [
+        { 
+            urls: [
+            'stun:stun1.l.google.com:19302',
+            'stun:stun2.l.google.com:19302',
+            ] 
+        },
+        // {
+        //   username: 'ef6PM2FD6DAO8HI1UF',
+        //   credential: 'zgVNPJLksOQaRzIT',
+        //   urls: ["relay1.expressturn.com:3478"],             
+        // },
+    ],
+    }; {% endcomment %}
+
+    //receive
+    let caller = '{{ call.caller.username }}';
+    chatSocket.onmessage = async function (e) {
+        if (username == caller) {
+            // Event listener for ICE candidates
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    //console.log(event.candidate);
+                    // Send the ICE candidate to the remote user
+                    chatSocket.send(JSON.stringify({
+                        'action': 'videoCall',
+                        'type': 'candidate',
+                        'candidate': event.candidate,
+                        'from':'caller'
+                    }));
+                }
+            };
+
+            let data = JSON.parse(e.data);
+            data = JSON.parse(data['message']);
+            if (data['type'] == 'answer' ) {
+                const answer = new RTCSessionDescription(data);
+                await pc.setRemoteDescription(answer);
+            }else if (data['candidate']  && data['from'] == 'callee') {
+                const candidate = new RTCIceCandidate(data['candidate']);   
+                await pc.addIceCandidate(candidate);
+            }
+
+        }else{
+
+            // Event listener for ICE candidates
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                //console.log(event.candidate);
+                // Send the ICE candidate to the remote user
+                chatSocket.send(JSON.stringify({
+                    'action': 'videoCall',
+                    'type': 'candidate',
+                    'candidate': event.candidate,
+                    'from':'callee'
+                }));
+                }
+            };
+
+
+            let data = JSON.parse(e.data);
+            data = JSON.parse(data['message']);
+            if (data['type'] == 'offer') {
+            const offer = new RTCSessionDescription(data);
+            await pc.setRemoteDescription(offer);
+        
+            // Create answer after setting remote description
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            // Send answer to remote user
+            chatSocket.send(JSON.stringify({
+                'action': 'videoCall',
+                'type': 'answer',
+                'answer': pc.localDescription,
+                'from':'callee'
+            }));
+            } else if (data['candidate'] && data['from'] == 'caller') {
+            const candidate = new RTCIceCandidate(data['candidate']);
+            await pc.addIceCandidate(candidate);
+            }
+
+        }
+    };
+    async function startCall() {
+        let stream = null;
+        try {
+            let constraints = { video: true, audio: true };
+
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            localStream = stream;
+            localVideo.srcObject = localStream;
+
+            // Create a new RTCPeerConnection object
+            pc = new RTCPeerConnection();
+
+            // Add the local media stream to the RTCPeerConnection
+            localStream.getTracks().forEach(track => {
+            pc.addTrack(track, localStream);
+            });
+            if (username == caller){
+                // Create an offer and set it as the local description
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                // Send the offer to the remote user
+                await chatSocket.send(JSON.stringify({
+                    'action': 'videoCall',
+                    'type': 'offer',
+                    'offer': pc.localDescription,
+                    'from': 'caller'
+                }));
+            }
+
+            pc.oniceconnectionstatechange = () => {
+            console.log("ICE connection state: " + pc.iceConnectionState);
+            if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+                console.log("Remote stream is active");
+                // You can perform additional actions here, such as displaying a notification or enabling certain features.
+            }
+            };
+
+            // Event listener for remote track media
+            pc.ontrack = event => {
+                console.log("Track added...");
+                if (!remoteVideo.srcObject) {
+                    remoteStream = event.streams[0];
+                    remoteVideo.srcObject = remoteStream;
+                }
+            }
+            
+
+        } catch (err) {
+            alert(err + "Error! Unable to access your camera and microphone.");
+        }
+
+    }
+
+    // Function to hang up the call
+    async function hangupCall() {
+        // Close the peer connection
+        await pc.close();
+        // Stop local stream
+        localStream.getTracks().forEach(track => track.stop());
+
+        if (remoteStream) {
+            remoteStream.getTracks().forEach(track => track.stop());
+        }
+        // Clear video streams
+        localVideo.srcObject = null;
+        remoteVideo.srcObject = null;
+        
+        console.log("connection state", pc.connectionState);
+
+        chatSocket.send(JSON.stringify({
+            'action': 'videoCall',
+            'type': 'close',
+            'call': '{{call.room}}'
+        }));
+    };
+
+    function toggleMic(e){
+        if (localStream.getAudioTracks()[0].enabled) {
+            localStream.getAudioTracks()[0].enabled = false;
+            e.target.classList.replace('bi-mic', 'bi-mic-mute');
+        } else {
+            localStream.getAudioTracks()[0].enabled = true;
+            e.target.classList.replace('bi-mic-mute', 'bi-mic');
+        }
+    }
+    startCall();
+</script>
+{% endblock %}
